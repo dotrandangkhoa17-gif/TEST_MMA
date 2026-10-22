@@ -579,7 +579,12 @@ export default function ListScreen() {
                     <TouchableOpacity
                       style={styles.bookItemLeft}
                       activeOpacity={0.7}
-                      onPress={() => router.push(`/book/${item.id}`)}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/book/[id]',
+                          params: { id: item.id },
+                        })
+                      }
                     >
                       <Text style={styles.bookTitle}>{item.title}</Text>
                       <Text style={styles.bookAuthor}>by {item.author}</Text>
@@ -637,7 +642,12 @@ export default function ListScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        onPress={() => router.push(`/book/${item.id}`)}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/book/[id]',
+                            params: { id: item.id },
+                          })
+                        }
                         style={styles.detailArrowBtn}
                         activeOpacity={0.7}
                       >

@@ -45,13 +45,19 @@ export default function BookDetailScreen() {
   const { user, loading: authLoading } = useAuth();
   const { getBookById, updateBook, deleteBook, toggleFavorite, loading: booksLoading } = useBooks();
 
-  const bookFromContext = getBookById(normalizedId);
+  const bookFromContext = normalizedId ? getBookById(normalizedId) : undefined;
   const [directBook, setDirectBook] = useState<Book | null>(null);
   const [isFetchingDirect, setIsFetchingDirect] = useState(false);
+  const [hasCheckedDirect, setHasCheckedDirect] = useState(false);
 
   // Fallback direct Firestore fetch if book is not immediately in Context
   useEffect(() => {
-    if (bookFromContext || !user || !normalizedId || booksLoading) return;
+    if (bookFromContext) {
+      setHasCheckedDirect(true);
+      return;
+    }
+
+    if (!user || !normalizedId || booksLoading) return;
 
     let isMounted = true;
     const fetchDirect = async () => {
@@ -90,7 +96,10 @@ export default function BookDetailScreen() {
       } catch (err) {
         console.error('Error fetching book directly:', err);
       } finally {
-        if (isMounted) setIsFetchingDirect(false);
+        if (isMounted) {
+          setIsFetchingDirect(false);
+          setHasCheckedDirect(true);
+        }
       }
     };
 
@@ -101,6 +110,7 @@ export default function BookDetailScreen() {
   }, [bookFromContext, user, normalizedId, booksLoading]);
 
   const book = bookFromContext || directBook;
+  const isResolving = !book && (!normalizedId || booksLoading || isFetchingDirect || !hasCheckedDirect);
 
   // Access control
   useEffect(() => {
@@ -228,7 +238,7 @@ export default function BookDetailScreen() {
     }
   };
 
-  if (authLoading || !user || (!book && (booksLoading || isFetchingDirect))) {
+  if (authLoading || !user || isResolving) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />

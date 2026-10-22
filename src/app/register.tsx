@@ -38,6 +38,14 @@ export default function RegisterScreen() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const isMountedRef = React.useRef(true);
+
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleEmailChange = (text: string) => {
     setEmail(text);
@@ -45,6 +53,7 @@ export default function RegisterScreen() {
       setEmailError(validateEmail(text));
     }
     if (authError) setAuthError(null);
+    if (successMessage) setSuccessMessage(null);
   };
 
   const handlePasswordChange = (text: string) => {
@@ -56,6 +65,7 @@ export default function RegisterScreen() {
       }
     }
     if (authError) setAuthError(null);
+    if (successMessage) setSuccessMessage(null);
   };
 
   const handleConfirmPasswordChange = (text: string) => {
@@ -64,14 +74,18 @@ export default function RegisterScreen() {
       setConfirmPasswordError(validateConfirmPassword(password, text));
     }
     if (authError) setAuthError(null);
+    if (successMessage) setSuccessMessage(null);
   };
 
   const handleSubmit = async () => {
+    if (loading) return;
+
     setHasSubmitted(true);
     setAuthError(null);
     setSuccessMessage(null);
 
-    const eErr = validateEmail(email);
+    const trimmedEmail = email.trim();
+    const eErr = validateEmail(trimmedEmail);
     const pErr = validatePassword(password, true);
     const cErr = validateConfirmPassword(password, confirmPassword);
 
@@ -85,24 +99,34 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      await register(email, password);
+      await register(trimmedEmail, password);
+      if (!isMountedRef.current) return;
       setSuccessMessage('Registration successful');
       setPassword('');
       setConfirmPassword('');
       setHasSubmitted(false);
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       console.error('Registration error:', err);
       let message = err.message || 'Failed to register';
       if (err.code === 'auth/email-already-in-use') {
         message = 'This email address is already in use.';
       } else if (err.code === 'auth/invalid-email') {
-        message = 'The email address is invalid.';
+        message = 'Please enter a valid email address';
       } else if (err.code === 'auth/weak-password') {
         message = 'Password must be at least 6 characters';
+      } else if (err.code === 'auth/network-request-failed') {
+        message = 'Network error. Please check your internet connection.';
+      } else if (err.code === 'auth/too-many-requests') {
+        message = 'Too many attempts. Please try again later.';
+      } else if (typeof message === 'string' && message.startsWith('Firebase:')) {
+        message = message.replace(/^Firebase:\s*/, '').replace(/\s*\([^)]*\)\.?$/, '');
       }
       setAuthError(message);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -150,9 +174,7 @@ export default function RegisterScreen() {
             {successMessage ? (
               <View style={styles.successBox}>
                 <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                <Text testID="form-success" style={styles.successText}>
-                  Registration successful
-                </Text>
+                <Text testID="form-success" style={styles.successText}>Registration successful</Text>
               </View>
             ) : null}
 
@@ -163,6 +185,7 @@ export default function RegisterScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              autoComplete="email"
               value={email}
               onChangeText={handleEmailChange}
               error={hasSubmitted ? emailError : null}
@@ -173,6 +196,7 @@ export default function RegisterScreen() {
               placeholder="Enter your password (at least 6 characters)"
               secureTextEntry
               autoCapitalize="none"
+              autoComplete="new-password"
               value={password}
               onChangeText={handlePasswordChange}
               error={hasSubmitted ? passwordError : null}
@@ -183,28 +207,29 @@ export default function RegisterScreen() {
               placeholder="Re-enter your password"
               secureTextEntry
               autoCapitalize="none"
+              autoComplete="new-password"
               value={confirmPassword}
               onChangeText={handleConfirmPasswordChange}
               error={hasSubmitted ? confirmPasswordError : null}
             />
 
+            <Button
+              title="Register"
+              onPress={handleSubmit}
+              loading={loading}
+              style={styles.submitBtn}
+              icon={<Ionicons name="person-add-outline" size={18} color={colors.textInverted} />}
+            />
+
             {successMessage ? (
               <Button
                 title="Go to Bookshelf"
-                variant="primary"
+                variant="outline"
                 onPress={() => router.replace('/list')}
-                style={styles.submitBtn}
-                icon={<Ionicons name="arrow-forward" size={18} color={colors.textInverted} />}
+                style={styles.bookshelfBtn}
+                icon={<Ionicons name="arrow-forward" size={18} color={colors.primary} />}
               />
-            ) : (
-              <Button
-                title="Register"
-                onPress={handleSubmit}
-                loading={loading}
-                style={styles.submitBtn}
-                icon={<Ionicons name="person-add-outline" size={18} color={colors.textInverted} />}
-              />
-            )}
+            ) : null}
 
             <View style={styles.footerLink}>
               <Text style={styles.footerText}>Already have an account? </Text>
@@ -312,6 +337,10 @@ const styles = StyleSheet.create({
   submitBtn: {
     marginTop: spacing.sm,
     paddingVertical: 13,
+  },
+  bookshelfBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: 12,
   },
   footerLink: {
     flexDirection: 'row',
