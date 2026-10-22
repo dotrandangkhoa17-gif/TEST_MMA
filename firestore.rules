@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /books/{bookId} {
+      // Helper: Check if user is authenticated
+      function isAuthenticated() {
+        return request.auth != null;
+      }
+
+      // Helper: Check if the request is for the authenticated user's own data
+      function isOwner(userId) {
+        return isAuthenticated() && request.auth.uid == userId;
+      }
+
+      // Helper: Validate title (required, non-empty after trim, max 100 characters)
+      function isValidTitle(title) {
+        return title is string && title.trim().size() > 0 && title.size() <= 100;
+      }
+
+      // Helper: Validate author (required, non-empty after trim, max 60 characters)
+      function isValidAuthor(author) {
+        return author is string && author.trim().size() > 0 && author.size() <= 60;
+      }
+
+      // Helper: Validate genre (must be one of 4 allowed genres)
+      function isValidGenre(genre) {
+        return genre is string && genre in ['Fiction', 'Non-Fiction', 'Academic', 'Other'];
+      }
+
+      // Helper: Validate status (must be one of 3 allowed statuses)
+      function isValidStatus(status) {
+        return status is string && status in ['To Read', 'Reading', 'Finished'];
+      }
+
+      // Helper: Validate rating (optional integer between 0 and 5)
+      function isValidRating(data) {
+        return !('rating' in data) || data.rating == null || (data.rating is int && data.rating >= 0 && data.rating <= 5);
+      }
+
+      // Helper: Validate notes (optional string at most 300 characters)
+      function isValidNotes(data) {
+        return !('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 300);
+      }
+
+      // Helper: Validate favorite flag (optional boolean)
+      function isValidFavorite(data) {
+        return !('favorite' in data) || data.favorite is bool;
+      }
+
+      // Helper: Validate entire book document structure
+      function isValidBook(data) {
+        return ('title' in data) && isValidTitle(data.title)
+          && ('author' in data) && isValidAuthor(data.author)
+          && ('genre' in data) && isValidGenre(data.genre)
+          && ('status' in data) && isValidStatus(data.status)
+          && isValidRating(data)
+          && isValidNotes(data)
+          && isValidFavorite(data)
+          && ('userId' in data && data.userId is string && data.userId == request.auth.uid);
+      }
+
+      // Only the book's owner can read their own books; guests and other users are denied
+      allow read: if isOwner(resource.data.userId);
+
+      // Only authenticated users can create books for themselves with valid data (cannot overwrite existing document)
+      allow create: if isOwner(request.resource.data.userId)
+        && isValidBook(request.resource.data)
+        && resource == null;
+
+      // Only the owner can update their own books, cannot transfer ownership to another user
+      allow update: if isOwner(resource.data.userId)
+        && isOwner(request.resource.data.userId)
+        && isValidBook(request.resource.data);
+
+      // Only the owner can delete their own books
+      allow delete: if isOwner(resource.data.userId);
+    }
+  }
+}
